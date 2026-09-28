@@ -1,8 +1,12 @@
-# React + Vite
+# RideX frontend — Yashwant
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 18 + Vite, Tailwind CSS, React Router, Axios, GSAP and Socket.IO Client.
 
-Currently, two official plugins are available:
+Copy `.env.example` to `.env`, run `npm ci`, then `npm run dev`.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- `npm run lint`: JavaScript and React checks.
+- `npm run build`: production bundle.
+- `npm run preview`: preview the built bundle.
+- `/demo`: fictional walkthrough that does not need a backend.
+
+The shared Axios client attaches the current token. Booking uses one step state rather than several overlapping panels. Hooks separate API synchronisation, location publishing and autocomplete from screen markup. Database responses decide when a save/booking/payment is successful.

@@ -1,113 +1,160 @@
-import React, { useState, useEffect } from 'react'
-
-const defaultCenter = { lat: 28.6139, lng: 77.2090 }
-
-const LiveTracking = ({ pickupCoords, destinationCoords, showRoute, hideControls }) => {
-    const [currentPosition, setCurrentPosition] = useState(defaultCenter)
-    const [carPos, setCarPos] = useState(defaultCenter)
-    const [progress, setProgress] = useState(0)
-    // mapType: 'm' (Roadmap), 'k' (Satellite), 'h' (Hybrid)
-    const [mapType, setMapType] = useState('m')
-    const [zoom, setZoom] = useState(15)
-
-    // Get real GPS position
-    useEffect(() => {
-        if (!navigator.geolocation) return
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                const p = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-                setCurrentPosition(p)
-                setCarPos(p)
-            },
-            () => {
-                setCurrentPosition(defaultCenter)
-                setCarPos(defaultCenter)
-            }
-        )
-
-        const watchId = navigator.geolocation.watchPosition(
-            (pos) => {
-                const p = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-                setCurrentPosition(p)
-            },
-            () => {}
-        )
-        return () => navigator.geolocation.clearWatch(watchId)
-    }, [])
-
-    // Animate car smoothly along trip route
-    useEffect(() => {
-        if (!showRoute) return
-        const interval = setInterval(() => {
-            setProgress((prev) => (prev >= 1 ? 0 : prev + 0.03))
-        }, 300)
-        return () => clearInterval(interval)
-    }, [showRoute])
-
-    useEffect(() => {
-        if (!showRoute) return
-        const start = pickupCoords || currentPosition
-        const end = destinationCoords || { lat: start.lat + 0.03, lng: start.lng + 0.03 }
-
-        setCarPos({
-            lat: start.lat + (end.lat - start.lat) * progress,
-            lng: start.lng + (end.lng - start.lng) * progress,
-        })
-    }, [progress, pickupCoords, destinationCoords, showRoute, currentPosition])
-
-    const center = showRoute ? carPos : currentPosition
-
-    const handleRecenter = () => {
-        if (!navigator.geolocation) return
-        navigator.geolocation.getCurrentPosition((pos) => {
-            setCurrentPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude })
-            setZoom(16)
-        })
-    }
-
-    const zoomIn = () => setZoom(z => Math.min(z + 1, 19))
-    const zoomOut = () => setZoom(z => Math.max(z - 1, 10))
-
-    // Google Maps embed URL with dynamic map type and zoom level
-    const mapUrl = `https://maps.google.com/maps?q=${center.lat},${center.lng}&t=${mapType}&z=${zoom}&output=embed`
-
+import PropTypes from "prop-types";
+import { useEffect, useState } from "react";
+import {
+  GoogleMap,
+  Marker,
+  DirectionsRenderer,
+  useJsApiLoader,
+} from "@react-google-maps/api";
+const toLatLng = (point) =>
+  point && Number.isFinite(point.ltd) && Number.isFinite(point.lng)
+    ? { lat: point.ltd, lng: point.lng }
+    : null;
+function InteractiveMap({ center, pickup, destination }) {
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: "ridex-map",
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API,
+  });
+  const [directions, setDirections] = useState(null);
+  const [routeError, setRouteError] = useState("");
+  const originLat = pickup?.lat,
+    originLng = pickup?.lng,
+    destLat = destination?.lat,
+    destLng = destination?.lng;
+  useEffect(() => {
+    if (!isLoaded || originLat == null || destLat == null) return;
+    let active = true;
+    new window.google.maps.DirectionsService().route(
+      {
+        origin: { lat: originLat, lng: originLng },
+        destination: { lat: destLat, lng: destLng },
+        travelMode: window.google.maps.TravelMode.DRIVING,
+      },
+      (result, status) => {
+        if (!active) return;
+        if (status === "OK") {
+          setDirections(result);
+          setRouteError("");
+        } else {
+          setDirections(null);
+          setRouteError("Route display unavailable.");
+        }
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [isLoaded, originLat, originLng, destLat, destLng]);
+  if (loadError)
     return (
-        <div className='relative w-full h-full min-h-[300px] bg-slate-950 overflow-hidden group'>
-            {/* Interactive Map View */}
-            <iframe
-                title='Live Tracking Map'
-                width='100%'
-                height='100%'
-                style={{ border: 0, minHeight: '100%' }}
-                loading='lazy'
-                allowFullScreen
-                src={mapUrl}
-                className='w-full h-full border-0 filter contrast-[1.04] brightness-[0.98] transition-all duration-300'
-            ></iframe>
-
-            {/* Map Mode Selector Bar (Hidden when searching locations) */}
-            <div className={`absolute top-3 left-3 z-30 bg-black/90 backdrop-blur-xl border border-white/20 p-1 rounded-2xl flex items-center gap-1 shadow-2xl transition-opacity duration-200 ${hideControls ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                {[
-                    { id: 'm', label: 'Map', icon: 'ri-map-2-fill', color: 'text-gray-900' },
-                    { id: 'k', label: 'Satellite', icon: 'ri-earth-fill', color: 'text-blue-500' },
-                    { id: 'h', label: 'Hybrid', icon: 'ri-road-map-fill', color: 'text-emerald-500' },
-                ].map(type => (
-                    <button
-                        key={type.id}
-                        onClick={() => setMapType(type.id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 ${
-                            mapType === type.id
-                                ? 'bg-white text-black shadow-lg scale-105'
-                                : 'text-gray-300 hover:text-white hover:bg-white/15'
-                        }`}
-                    >
-                        <i className={`${type.icon} text-sm ${mapType === type.id ? type.color : ''}`}></i>
-                        {type.label}
-                    </button>
-                ))}
-            </div>
-        </div>
-    )
+      <p className="p-6">
+        Map unavailable. Your ride details are still available.
+      </p>
+    );
+  if (!isLoaded)
+    return (
+      <p className="p-6" role="status">
+        Loading map…
+      </p>
+    );
+  return (
+    <>
+      <GoogleMap
+        center={center}
+        zoom={14}
+        mapContainerStyle={{ width: "100%", height: "100%" }}
+        options={{ streetViewControl: false, mapTypeControl: false }}
+      >
+        <Marker position={center} title="Latest location" />
+        {directions && (
+          <DirectionsRenderer
+            directions={directions}
+            options={{ preserveViewport: true }}
+          />
+        )}
+      </GoogleMap>
+      {routeError && (
+        <p className="absolute bottom-2 left-2 bg-white p-2 text-sm">
+          {routeError}
+        </p>
+      )}
+    </>
+  );
+}
+export default function LiveTracking({
+  captainLocation,
+  locationUpdatedAt,
+  pickupCoords,
+  destinationCoords,
+  trackCaptain = false,
+}) {
+  const [position, setPosition] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (trackCaptain) return;
+    if (!navigator.geolocation) {
+      setError("Location is unavailable in this browser.");
+      return;
+    }
+    const id = navigator.geolocation.watchPosition(
+      ({ coords }) => {
+        setPosition({ lat: coords.latitude, lng: coords.longitude });
+        setError("");
+      },
+      () =>
+        setError(
+          "Allow location access to show your position. You can still enter addresses.",
+        ),
+      { timeout: 10000, maximumAge: 10000 },
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, [trackCaptain]);
+  const center = trackCaptain ? toLatLng(captainLocation) : position;
+  if (!center)
+    return (
+      <div className="flex h-full min-h-64 items-center justify-center bg-slate-100 p-8 text-center text-slate-600">
+        <p>
+          {trackCaptain
+            ? "Waiting for the captain’s location…"
+            : error || "Finding your location…"}
+        </p>
+      </div>
+    );
+  return (
+    <div className="relative h-full min-h-64 overflow-hidden rounded-2xl bg-slate-100">
+      {import.meta.env.VITE_GOOGLE_MAPS_API ? (
+        <InteractiveMap
+          center={center}
+          pickup={toLatLng(pickupCoords)}
+          destination={toLatLng(destinationCoords)}
+        />
+      ) : (
+        <iframe
+          title="Latest location map"
+          className="h-full min-h-64 w-full border-0"
+          src={`https://maps.google.com/maps?q=${center.lat},${center.lng}&z=15&output=embed`}
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+        />
+      )}
+      <p className="absolute bottom-3 left-3 right-3 rounded-lg bg-white/95 p-2 text-xs text-slate-700">
+        {trackCaptain
+          ? `Captain’s last location${locationUpdatedAt ? " · " + new Date(locationUpdatedAt).toLocaleTimeString() : ""}. Updates may be delayed.`
+          : "Your device location"}
+      </p>
+    </div>
+  );
 }
 
-export default LiveTracking
+LiveTracking.propTypes = {
+  captainLocation: PropTypes.object,
+  locationUpdatedAt: PropTypes.string,
+  pickupCoords: PropTypes.object,
+  destinationCoords: PropTypes.object,
+  trackCaptain: PropTypes.bool,
+};
+InteractiveMap.propTypes = {
+  center: PropTypes.object.isRequired,
+  pickup: PropTypes.object,
+  destination: PropTypes.object,
+};

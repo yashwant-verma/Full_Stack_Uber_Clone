@@ -1,218 +1,225 @@
-import React, { useRef, useState, useEffect, useContext } from 'react'
-import { Link } from 'react-router-dom'
-import CaptainDetails from '../components/CaptainDetails'
-import RidePopUp from '../components/RidePopUp'
-import { useGSAP } from '@gsap/react'
-import gsap from 'gsap'
-import ConfirmRidePopUp from '../components/ConfirmRidePopUp'
-import { SocketContext } from '../context/SocketContext'
-import { CaptainDataContext } from '../context/CapatainContext'
-import axios from 'axios'
-import LiveTracking from '../components/LiveTracking'
-
-const CaptainHome = () => {
-    const [ridePopupPanel, setRidePopupPanel] = useState(false)
-    const [confirmRidePopupPanel, setConfirmRidePopupPanel] = useState(false)
-
-    const ridePopupPanelRef = useRef(null)
-    const confirmRidePopupPanelRef = useRef(null)
-    const [ride, setRide] = useState(null)
-
-    const { socket } = useContext(SocketContext)
-    const { captain } = useContext(CaptainDataContext)
-
-    useEffect(() => {
-        if (!captain?._id) return
-
-        const registerCaptain = () => {
-            socket.emit('join', {
-                userId: captain._id,
-                userType: 'captain'
-            })
-        }
-
-        registerCaptain()
-
-        // Re-register on reconnect (critical after backend restarts)
-        socket.on('connect', registerCaptain)
-
-        const updateLocation = () => {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(position => {
-                    socket.emit('update-location-captain', {
-                        userId: captain._id,
-                        location: {
-                            ltd: position.coords.latitude,
-                            lng: position.coords.longitude
-                        }
-                    })
-                })
-            }
-        }
-
-        const locationInterval = setInterval(updateLocation, 10000)
-        updateLocation()
-
-        const fetchPendingRides = async () => {
-            try {
-                const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/rides/pending`, {
-                    headers: {
-                        Authorization: `Bearer ${localStorage.getItem('token')}`
-                    }
-                })
-                if (response.data && response.data.length > 0) {
-                    const latestRide = response.data[0]
-                    setRide(prev => {
-                        if (!prev || prev._id !== latestRide._id) {
-                            setRidePopupPanel(true)
-                            return latestRide
-                        }
-                        return prev
-                    })
-                }
-            } catch (err) {
-                // Ignore silent polling errors
-            }
-        }
-
-        const pollInterval = setInterval(fetchPendingRides, 3000)
-        fetchPendingRides()
-
-        const handleNewRide = (data) => {
-            setRide(data)
-            setRidePopupPanel(true)
-        }
-
-        const handleRideCancelled = (data) => {
-            setRide(prev => {
-                if (prev && prev._id === data.rideId) {
-                    setRidePopupPanel(false)
-                    setConfirmRidePopupPanel(false)
-                    return null
-                }
-                return prev
-            })
-        }
-
-        socket.on('new-ride', handleNewRide)
-        socket.on('ride-cancelled', handleRideCancelled)
-
-        return () => {
-            clearInterval(locationInterval)
-            clearInterval(pollInterval)
-            socket.off('connect', registerCaptain)
-            socket.off('new-ride', handleNewRide)
-            socket.off('ride-cancelled', handleRideCancelled)
-        }
-    }, [captain, socket])
-
-    async function confirmRide() {
-        try {
-            await axios.post(`${import.meta.env.VITE_BASE_URL}/rides/confirm`, {
-                rideId: ride._id,
-                captainId: captain._id,
-            }, {
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`
-                }
-            })
-
-            setRidePopupPanel(false)
-            setConfirmRidePopupPanel(true)
-        } catch (err) {
-            console.error('Error confirming ride:', err)
-        }
+import { useCallback, useContext, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import api, { errorMessage } from "../api/client";
+import { CaptainDataContext } from "../context/contexts";
+import useActiveRide from "../hooks/useActiveRide";
+import useCaptainLocation from "../hooks/useCaptainLocation";
+import LiveTracking from "../components/LiveTracking";
+import PageShell from "../components/PageShell";
+import Feedback from "../components/Feedback";
+export default function CaptainHome() {
+  const { captain, setCaptain } = useContext(CaptainDataContext);
+  const {
+    ride,
+    refresh,
+    loading,
+    error: syncError,
+    connected,
+  } = useActiveRide();
+  const locationError = useCaptainLocation(
+    captain?.status === "active" || !!ride,
+  );
+  const [requests, setRequests] = useState([]);
+  const [ignored, setIgnored] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [otp, setOtp] = useState("");
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (ride?.status === "ongoing") navigate("/captain-riding");
+  }, [ride, navigate]);
+  const getRequests = useCallback(async () => {
+    if (captain?.status !== "active" || ride) {
+      setRequests([]);
+      return;
     }
-
-    useGSAP(function () {
-        if (ridePopupPanel) {
-            gsap.to(ridePopupPanelRef.current, {
-                transform: 'translateY(0)'
+    try {
+      const { data } = await api.get("/rides/pending");
+      setRequests(data);
+      setError("");
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  }, [captain?.status, ride]);
+  useEffect(() => {
+    getRequests();
+    const timer = setInterval(getRequests, 10000);
+    return () => clearInterval(timer);
+  }, [getRequests]);
+  useEffect(() => {
+    api
+      .get("/rides/captain-stats")
+      .then(({ data }) => setStats(data))
+      .catch((err) => setError(errorMessage(err)));
+  }, [ride]);
+  async function action(callback) {
+    setBusy(true);
+    setError("");
+    try {
+      await callback();
+      await refresh();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <PageShell title={`Hello, ${captain?.fullname?.firstname || "Captain"}`}>
+      <Feedback message={error || syncError || locationError} />
+      {!connected && (
+        <p className="mb-3 text-sm text-slate-600">
+          Live connection unavailable. Ride updates are checked periodically.
+        </p>
+      )}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <p className="font-semibold">
+          You are {captain?.status === "active" ? "online" : "offline"}
+        </p>
+        <button
+          className="btn"
+          disabled={busy || !!ride}
+          onClick={() =>
+            action(async () => {
+              const { data } = await api.patch("/captains/availability", {
+                status: captain.status === "active" ? "inactive" : "active",
+              });
+              setCaptain(data);
             })
-        } else {
-            gsap.to(ridePopupPanelRef.current, {
-                transform: 'translateY(100%)'
-            })
-        }
-    }, [ridePopupPanel])
-
-    useGSAP(function () {
-        if (confirmRidePopupPanel) {
-            gsap.to(confirmRidePopupPanelRef.current, {
-                transform: 'translateY(0)'
-            })
-        } else {
-            gsap.to(confirmRidePopupPanelRef.current, {
-                transform: 'translateY(100%)'
-            })
-        }
-    }, [confirmRidePopupPanel])
-
-    return (
-        <div className='h-screen flex flex-col justify-between overflow-hidden relative bg-slate-100'>
-            {/* Modern Floating Captain Top Bar */}
-            <div className='fixed top-3 left-3 right-3 z-50 flex items-center justify-between px-4 py-2.5 bg-white/85 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-white/60 transition-all'>
-                <div className='flex items-center gap-3'>
-                    <span className='text-lg font-black tracking-tight text-gray-900'>Ride<span className='text-blue-500'>X</span></span>
-                    <span className='h-4 w-px bg-gray-200'></span>
-                    <div className='flex items-center gap-1.5 bg-green-50 px-2.5 py-1 rounded-full border border-green-200'>
-                        <span className='h-2 w-2 rounded-full bg-green-500 animate-pulse'></span>
-                        <span className='text-[11px] font-extrabold text-green-700 uppercase tracking-wider'>Captain Online</span>
-                    </div>
-                </div>
-
-                <div className='flex items-center gap-2'>
-                    <Link
-                        to='/captain-profile'
-                        className='h-9 w-9 bg-gray-100/80 hover:bg-black hover:text-white flex items-center justify-center rounded-xl transition-all duration-200 text-gray-700 shadow-sm'
-                        title='Profile Settings'
-                    >
-                        <i className="ri-user-settings-line text-sm"></i>
-                    </Link>
-                    <Link
-                        to='/captain/logout'
-                        className='h-9 w-9 bg-red-50 hover:bg-red-500 hover:text-white flex items-center justify-center rounded-xl transition-all duration-200 text-red-600 shadow-sm'
-                        title='Log out'
-                    >
-                        <i className="ri-logout-box-r-line text-sm"></i>
-                    </Link>
-                </div>
-            </div>
-
-            <div className='h-[60%] pt-16 relative'>
-                <LiveTracking />
-            </div>
-
-            <div className='h-[40%] p-6 bg-white rounded-t-3xl shadow-[0_-10px_20px_rgba(0,0,0,0.08)] z-10 overflow-y-auto max-w-2xl mx-auto w-full'>
-                <CaptainDetails />
-            </div>
-
-            {/* Ride Request Panel */}
-            <div
-                ref={ridePopupPanelRef}
-                className='fixed inset-x-0 bottom-0 z-50 translate-y-full max-w-lg mx-auto w-full bg-white rounded-t-3xl shadow-2xl px-4 py-8 pt-10'
-            >
-                <RidePopUp
-                    ride={ride}
-                    setRidePopupPanel={setRidePopupPanel}
-                    setConfirmRidePopupPanel={setConfirmRidePopupPanel}
-                    confirmRide={confirmRide}
-                />
-            </div>
-
-            {/* OTP Confirmation Panel */}
-            <div
-                ref={confirmRidePopupPanelRef}
-                className='fixed inset-x-0 bottom-0 z-50 translate-y-full max-w-lg mx-auto w-full bg-white rounded-t-3xl shadow-2xl px-4 py-6 pt-8 max-h-[92vh] overflow-y-auto'
-            >
-                <ConfirmRidePopUp
-                    ride={ride}
-                    setConfirmRidePopupPanel={setConfirmRidePopupPanel}
-                    setRidePopupPanel={setRidePopupPanel}
-                />
-            </div>
+          }
+        >
+          {captain?.status === "active" ? "Go offline" : "Go online"}
+        </button>
+      </div>
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[
+          ["Today’s rides", stats?.todayRides],
+          ["Today’s earnings", stats && `₹${stats.todayEarnings}`],
+          ["Total rides", stats?.totalRides],
+          ["Total earnings", stats && `₹${stats.totalEarnings}`],
+        ].map(([label, value]) => (
+          <div className="card" key={label}>
+            <p className="text-sm text-slate-500">{label}</p>
+            <p className="mt-2 text-2xl font-bold">{value ?? "—"}</p>
+          </div>
+        ))}
+      </div>
+      <p className="mb-4 text-sm">
+        {stats?.rating
+          ? `Rating: ${stats.rating} / 5`
+          : "New driver · No ratings yet"}
+      </p>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="h-80 lg:h-[500px]">
+          <LiveTracking />
         </div>
-    )
+        <section className="card">
+          {loading ? (
+            <p role="status">Checking current ride…</p>
+          ) : ride ? (
+            <form
+              className="space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                action(async () => {
+                  await api.post("/rides/start-ride", {
+                    rideId: ride._id,
+                    otp,
+                  });
+                  navigate("/captain-riding");
+                });
+              }}
+            >
+              <h2 className="text-xl font-bold">Your assigned ride</h2>
+              <p>
+                {ride.user?.fullname?.firstname} · ₹{ride.fare}
+              </p>
+              <p>Pickup: {ride.pickup}</p>
+              <p>Destination: {ride.destination}</p>
+              <label htmlFor="ride-otp" className="block font-semibold">
+                Ask the rider for their OTP
+              </label>
+              <input
+                id="ride-otp"
+                className="field"
+                inputMode="numeric"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                required
+                value={otp}
+                onChange={(event) =>
+                  setOtp(event.target.value.replace(/\D/g, ""))
+                }
+              />
+              <button
+                className="btn w-full"
+                disabled={busy || otp.length !== 6}
+              >
+                Verify OTP and start ride
+              </button>
+            </form>
+          ) : (
+            <>
+              <h2 className="mb-4 text-xl font-bold">Nearby requests</h2>
+              {captain?.status !== "active" ? (
+                <p>Go online and allow location access to receive requests.</p>
+              ) : requests.filter((item) => !ignored.includes(item._id))
+                  .length ? (
+                requests
+                  .filter((item) => !ignored.includes(item._id))
+                  .map((item) => (
+                    <article
+                      key={item._id}
+                      className="mb-3 rounded-xl border p-4"
+                    >
+                      <p className="font-semibold">
+                        {item.user?.fullname?.firstname} · ₹{item.fare}
+                      </p>
+                      <p className="my-2 text-sm">
+                        {item.pickup} → {item.destination}
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          className="btn"
+                          disabled={busy}
+                          onClick={() =>
+                            action(async () => {
+                              await api.post("/rides/confirm", {
+                                rideId: item._id,
+                              });
+                            })
+                          }
+                        >
+                          Accept
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          onClick={() =>
+                            setIgnored((previous) => [...previous, item._id])
+                          }
+                        >
+                          Ignore
+                        </button>
+                      </div>
+                    </article>
+                  ))
+              ) : (
+                <p className="text-slate-600">
+                  No matching rides within 5 km right now. We’ll check again
+                  shortly.
+                </p>
+              )}
+              <button
+                className="mt-4 text-sm text-blue-700"
+                onClick={getRequests}
+              >
+                Refresh requests
+              </button>
+            </>
+          )}
+        </section>
+      </div>
+    </PageShell>
+  );
 }
-
-export default CaptainHome

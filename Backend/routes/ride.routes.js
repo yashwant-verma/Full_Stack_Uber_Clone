@@ -39,7 +39,13 @@ router.get("/captain-stats", auth.authCaptain, run(c.getCaptainStats));
 router.get("/pending", auth.authCaptain, run(c.getPendingRides));
 router.get("/user-active-ride", auth.authUser, run(c.getActiveRide));
 router.get("/active", auth.authAny, run(c.getActiveRide));
-router.get("/history", auth.authAny, run(c.history));
+router.get(
+  "/history",
+  auth.authAny,
+  query("page").optional().isInt({ min: 1, max: 10000 }),
+  validate,
+  run(c.history),
+);
 router.patch(
   "/location",
   auth.authCaptain,

@@ -1,5 +1,4 @@
 const publicAccount = require("../utils/publicAccount");
-const crypto = require("crypto");
 const captainModel = require("../models/captain.model");
 const captainService = require("../services/captain.service");
 const blackListTokenModel = require("../models/blackListToken.model");
@@ -46,12 +45,10 @@ module.exports.registerCaptain = async (req, res, next) => {
 module.exports.loginCaptain = async (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return res
-      .status(400)
-      .json({
-        errors: errors.array(),
-        message: errors.array()[0]?.msg || "Validation error",
-      });
+    return res.status(400).json({
+      errors: errors.array(),
+      message: errors.array()[0]?.msg || "Validation error",
+    });
   }
 
   const { email, password } = req.body;
@@ -103,83 +100,10 @@ module.exports.logoutCaptain = async (req, res, next) => {
   res.status(200).json({ message: "Logout successfully" });
 };
 
-module.exports.forgotPassword = async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res
-      .status(400)
-      .json({ errors: errors.array(), message: errors.array()[0]?.msg });
-  }
-
-  const { email } = req.body;
-  const cleanEmail = email.toLowerCase().trim();
-  const captain = await captainModel.findOne({ email: cleanEmail });
-
-  if (!captain) {
-    return res
-      .status(404)
-      .json({ message: "Captain with this email does not exist" });
-  }
-
-  const otp = crypto.randomInt(100000, 1000000).toString();
-  captain.resetOtp = crypto.createHash("sha256").update(otp).digest("hex");
-  captain.resetOtpExpires = Date.now() + 15 * 60 * 1000;
-  await captain.save();
-
-  try {
-    const emailService = require("../services/email.service");
-    await emailService.sendPasswordResetEmail({
-      to: captain.email,
-      otp,
-      userName: captain.fullname?.firstname || "Captain",
-    });
-    return res
-      .status(200)
-      .json({ message: "Password reset OTP sent to your email." });
-  } catch (err) {
-    return res
-      .status(err.status || 500)
-      .json({ message: err.message || "Failed to send reset email." });
-  }
-};
-
-module.exports.resetPassword = async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res
-      .status(400)
-      .json({ errors: errors.array(), message: errors.array()[0]?.msg });
-  }
-
-  const { email, otp, newPassword } = req.body;
-  const cleanEmail = email.toLowerCase().trim();
-  const captain = await captainModel
-    .findOne({ email: cleanEmail })
-    .select("+resetOtp +resetOtpExpires +password +tokenVersion");
-
-  if (
-    !captain ||
-    captain.resetOtp !==
-      crypto.createHash("sha256").update(otp).digest("hex") ||
-    !captain.resetOtpExpires ||
-    captain.resetOtpExpires < Date.now()
-  ) {
-    return res.status(400).json({ message: "Invalid or expired OTP code." });
-  }
-
-  const hashedPassword = await captainModel.hashPassword(newPassword);
-  captain.password = hashedPassword;
-  captain.tokenVersion = (captain.tokenVersion || 0) + 1;
-  captain.resetOtp = undefined;
-  captain.resetOtpExpires = undefined;
-  captain.status = "inactive";
-  await captain.save();
-
-  require("../socket").disconnectAccount("captain", captain._id);
-  return res
-    .status(200)
-    .json({ message: "Password reset successful. You can now log in." });
-};
+module.exports.forgotPassword =
+  require("../services/passwordReset.service").request(captainModel);
+module.exports.resetPassword =
+  require("../services/passwordReset.service").reset(captainModel, "captain");
 for (const name of Object.keys(module.exports))
   module.exports[name] = require("../utils/errors").asyncHandler(
     module.exports[name],

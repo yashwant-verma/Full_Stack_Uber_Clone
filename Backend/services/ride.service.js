@@ -88,39 +88,75 @@ async function confirmRide({ rideId, captain }) {
   return ride;
 }
 async function startRide({ rideId, otp, captain }) {
+  const filter = { _id: rideId, captain: captain._id, status: "accepted" };
+  await Ride.updateOne(
+    { ...filter, otpLockedUntil: { $lte: new Date() } },
+    { $set: { otpAttempts: 0 }, $unset: { otpLockedUntil: 1 } },
+  );
+  const attempt = await Ride.findOneAndUpdate(
+    {
+      ...filter,
+      $or: [{ otpAttempts: { $lt: 5 } }, { otpAttempts: { $exists: false } }],
+    },
+    {
+      $inc: { otpAttempts: 1 },
+      $set: { otpLockedUntil: new Date(Date.now() + 15 * 60000) },
+    },
+    { new: true },
+  ).select("+otp");
+  if (!attempt) {
+    if (!(await Ride.exists(filter)))
+      throw httpError(409, "Assigned ride is unavailable.");
+    throw httpError(
+      429,
+      "OTP locked. Wait 15 minutes after too many attempts.",
+    );
+  }
+  if (typeof otp !== "string" || attempt.otp !== otp)
+    throw httpError(409, "Invalid ride OTP.");
   const ride = await Ride.findOneAndUpdate(
-    { _id: rideId, captain: captain._id, status: "accepted", otp },
+    { ...filter, otp },
     { status: "ongoing" },
     { new: true },
   );
-  if (!ride)
-    throw httpError(
-      409,
-      "Check the OTP and assigned ride. It may already have changed.",
-    );
+  if (!ride) throw httpError(409, "Ride status changed. Refresh and retry.");
   return ride;
 }
 async function endRide({ rideId, captain }) {
-  const ride = await Ride.findOneAndUpdate(
+  // UPI must already be captured and verified. Cash still needs both people to confirm.
+  let ride = await Ride.findOneAndUpdate(
     {
       _id: rideId,
       captain: captain._id,
       status: "ongoing",
-      paymentStatus: "rider_confirmed",
+      paymentMethod: "upi",
+      paymentStatus: "verified",
     },
-    {
-      status: "completed",
-      active: false,
-      paymentStatus: "captain_confirmed",
-      paidAt: new Date(),
-      completedAt: new Date(),
-    },
+    { status: "completed", active: false, completedAt: new Date() },
     { new: true },
   );
   if (!ride)
+    ride = await Ride.findOneAndUpdate(
+      {
+        _id: rideId,
+        captain: captain._id,
+        status: "ongoing",
+        paymentMethod: { $ne: "upi" },
+        paymentStatus: "rider_confirmed",
+      },
+      {
+        status: "completed",
+        active: false,
+        paymentStatus: "captain_confirmed",
+        paidAt: new Date(),
+        completedAt: new Date(),
+      },
+      { new: true },
+    );
+  if (!ride)
     throw httpError(
       409,
-      "Ask the rider to confirm cash payment before finishing your assigned ride.",
+      "Payment must be verified (UPI) or confirmed by the rider (cash) before finishing your assigned ride.",
     );
   return ride;
 }
@@ -148,3 +184,5 @@ module.exports = {
   canReceiveRide,
   activeStatuses,
 };
+
+module.exports = require("../utils/instrument")(module.exports, "ride");

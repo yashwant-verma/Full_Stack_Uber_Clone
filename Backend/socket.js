@@ -1,9 +1,10 @@
+const logger = require("./utils/logger");
 const { Server } = require("socket.io");
 const { authenticate } = require("./middlewares/auth.middleware");
 let io;
 const room = (role, id) => `${role}:${id}`;
 function emitTo(role, id, event, data) {
-  if (id) io?.to(room(role, id)).emit(event, data);
+  if (id) { logger.debug("socket.emit", { role, accountId: id, event, transportReady: Boolean(io) }); io?.to(room(role, id)).emit(event, data); }
 }
 function initializeSocket(server) {
   io = new Server(server, {
@@ -16,13 +17,15 @@ function initializeSocket(server) {
     try {
       socket.identity = await authenticate(socket.handshake.auth.token);
       next();
-    } catch {
+    } catch (error) {
+      logger.warn("socket.authentication_failed", { error });
       next(new Error("Please log in again."));
     }
   });
   io.on("connection", (socket) => {
     const { role, account } = socket.identity;
     socket.join(room(role, account._id));
+    logger.info("socket.connected", { role, accountId: account._id, socketId: socket.id });
     // Clients cannot choose identities or publish payment/location events.
     // Authenticated HTTP endpoints save changes before broadcasting them.
     const expiry =
@@ -32,7 +35,7 @@ function initializeSocket(server) {
       () => socket.disconnect(true),
       Math.max(0, expiry),
     );
-    socket.on("disconnect", () => clearTimeout(timer));
+    socket.on("disconnect", reason => { clearTimeout(timer); logger.info("socket.disconnected", { role, accountId: account._id, reason }); });
   });
 }
 function disconnectAccount(role, id) {

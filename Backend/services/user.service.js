@@ -20,3 +20,5 @@ module.exports.createUser = async ({
 
   return user;
 };
+
+module.exports = require("../utils/instrument")(module.exports, "user");

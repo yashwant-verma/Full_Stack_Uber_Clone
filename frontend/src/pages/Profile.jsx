@@ -24,6 +24,7 @@ export default function Profile() {
     account?.savedPlaces?.find((place) => place.label === "Work")?.address ||
       "",
   );
+  const [currentPassword, setCurrentPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -43,8 +44,10 @@ export default function Profile() {
         : await api.patch(`${path}/profile`, {
             fullname: { firstname: first.trim(), lastname: last.trim() },
             email,
+            currentPassword,
           });
       setAccount(data);
+      setCurrentPassword("");
       setMessage(places ? "Saved places updated." : "Profile saved.");
     } catch (err) {
       setError(errorMessage(err));
@@ -77,6 +80,20 @@ export default function Profile() {
               />
             </label>
           ))}
+          {email.trim().toLowerCase() !== account?.email && (
+            <label className="block text-sm font-semibold">
+              Current password (required to change email)
+              <input
+                className="field mt-2"
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(event) => setCurrentPassword(event.target.value)}
+                required
+                maxLength={72}
+              />
+            </label>
+          )}
           <button className="btn" disabled={busy}>
             {busy ? "Saving…" : "Save profile"}
           </button>

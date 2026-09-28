@@ -17,7 +17,7 @@ export default function FareBreakdown({ ride }) {
           </div>
         ))}
       <div className="flex justify-between border-t pt-3 text-lg font-bold">
-        <dt>Total · Cash</dt>
+        <dt>Total · {ride.paymentMethod === "upi" ? "UPI" : "Cash"}</dt>
         <dd>₹{ride.fare}</dd>
       </div>
     </dl>

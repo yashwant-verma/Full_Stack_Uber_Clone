@@ -44,7 +44,7 @@ export default function RideDetails() {
           <section className="card space-y-4">
             <h2 className="text-xl font-bold">
               RideX ·{" "}
-              {ride.status === "completed" ? "Cash receipt" : "Ride summary"}
+              {ride.status === "completed" ? "Payment receipt" : "Ride summary"}
             </h2>
             <p className="break-all text-xs text-slate-500">
               Ride ID: {ride._id}
@@ -74,6 +74,16 @@ export default function RideDetails() {
               {ride.paymentStatus?.replaceAll("_", " ") || "Not recorded"}
             </p>
             <FareBreakdown ride={ride} />
+            {ride.paymentMode === "test" && (
+              <p className="text-sm font-bold text-amber-800">
+                TEST PAYMENT · No real money collected.
+              </p>
+            )}
+            {ride.paymentId && (
+              <p className="break-all text-xs text-slate-500">
+                Payment reference: {ride.paymentId}
+              </p>
+            )}
             {ride.status === "completed" && (
               <button
                 className="btn-secondary no-print"

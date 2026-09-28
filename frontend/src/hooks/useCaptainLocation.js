@@ -1,9 +1,11 @@
+import { log } from "../utils/logger";
 import { useEffect, useState } from "react";
 import api, { errorMessage } from "../api/client";
 export default function useCaptainLocation(enabled) {
   const [error, setError] = useState("");
   useEffect(() => {
     if (!enabled) return;
+    log("ui.geolocation", { status: "starting captain location updates" });
     if (!navigator.geolocation) {
       setError("Your browser does not support location.");
       return;

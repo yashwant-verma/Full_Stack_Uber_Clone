@@ -2,6 +2,8 @@ module.exports = (account) => {
   const data = account.toObject ? account.toObject() : { ...account };
   for (const key of [
     "tokenVersion",
+    "resetOtpAttempts",
+    "resetOtpRequestedAt",
     "password",
     "resetOtp",
     "resetOtpExpires",

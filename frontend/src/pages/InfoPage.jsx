@@ -20,7 +20,7 @@ const pages = {
   terms: [
     "Project terms",
     "RideX is a student portfolio and learning project, not a commercial transport service. Demo bookings are fictional and do not dispatch vehicles or collect money.",
-    "The configured app records cash confirmations; it does not process card or UPI payments. Do not rely on this project for emergency assistance or real transport.",
+    "The configured app records cash confirmations and supports Razorpay UPI when enabled. Test mode does not collect real money. It does not support card payments or automatic driver payouts. Do not rely on this project for emergency assistance or real transport.",
   ],
 };
 export default function InfoPage({ page }) {

@@ -1,3 +1,11 @@
+const escapeHtml = (value) =>
+  String(value).replace(
+    /[&<>"']/g,
+    (character) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        character
+      ],
+  );
 const nodemailer = require("nodemailer");
 
 const createTransporter = () => {
@@ -28,7 +36,7 @@ module.exports.sendPasswordResetEmail = async ({ to, otp, userName }) => {
   const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; rounded: 12px;">
             <h2 style="color: #000000; margin-bottom: 10px;">RideX</h2>
-            <p style="color: #555555;">Hello ${userName || "User"},</p>
+            <p style="color: #555555;">Hello ${escapeHtml(userName || "User")},</p>
             <p style="color: #555555;">You requested to reset your password. Use the following 6-digit OTP code to complete your password reset:</p>
             <div style="background-color: #f4f4f4; padding: 15px; text-align: center; border-radius: 8px; margin: 20px 0;">
                 <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #000000;">${otp}</span>
@@ -54,9 +62,10 @@ module.exports.sendPasswordResetEmail = async ({ to, otp, userName }) => {
     });
     return { success: true, simulated: false };
   } catch (err) {
-    console.error("Error sending password reset email via Nodemailer:", err);
     throw new Error(
       "Failed to send password reset email. Please try again later.",
     );
   }
 };
+
+module.exports = require("../utils/instrument")(module.exports, "email");

@@ -73,3 +73,5 @@ module.exports = {
   getAutoCompleteSuggestions,
   distanceKm,
 };
+
+module.exports = require("../utils/instrument")(module.exports, "maps");

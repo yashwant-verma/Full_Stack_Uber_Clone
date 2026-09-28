@@ -2,6 +2,16 @@ const publicAccount = require("../utils/publicAccount");
 const { httpError } = require("../utils/errors");
 const Ride = require("../models/ride.model");
 exports.profile = async (req, res) => {
+  const email = req.body.email.trim().toLowerCase();
+  if (email !== req.account.email) {
+    const Model = req.account.constructor;
+    const account = await Model.findById(req.account._id).select("+password");
+    if (
+      typeof req.body.currentPassword !== "string" ||
+      !(await account.comparePassword(req.body.currentPassword))
+    )
+      throw httpError(403, "Enter your current password to change your email.");
+  }
   req.account.fullname = {
     firstname: req.body.fullname.firstname,
     lastname: req.body.fullname.lastname || undefined,

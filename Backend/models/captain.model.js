@@ -36,6 +36,8 @@ const captainSchema = new mongoose.Schema({
   socketId: {
     type: String,
   },
+  resetOtpAttempts: { type: Number, default: 0, select: false },
+  resetOtpRequestedAt: { type: Date, select: false },
   resetOtp: {
     type: String,
     select: false,
@@ -89,7 +91,13 @@ captainSchema.methods.generateAuthToken = function () {
   const token = jwt.sign(
     { _id: this._id, role: "captain", tokenVersion: this.tokenVersion || 0 },
     process.env.JWT_SECRET,
-    { expiresIn: "24h" },
+    {
+      jwtid: require("crypto").randomUUID(),
+      expiresIn: "8h",
+      algorithm: "HS256",
+      issuer: "ridex",
+      audience: "ridex-app",
+    },
   );
   return token;
 };

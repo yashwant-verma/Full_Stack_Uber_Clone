@@ -95,8 +95,9 @@ exports.confirmPayment = async (req, res) => {
       user: req.user._id,
       status: "ongoing",
       paymentStatus: { $in: ["pending", "rider_confirmed"] },
+      paymentMethod: { $ne: "upi" },
     },
-    { paymentStatus: "rider_confirmed" },
+    { paymentStatus: "rider_confirmed", paymentMethod: "cash" },
     { new: true },
   );
   if (!ride) throw httpError(409, "Payment cannot be confirmed for this ride.");

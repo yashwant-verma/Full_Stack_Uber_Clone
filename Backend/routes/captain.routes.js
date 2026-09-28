@@ -1,19 +1,32 @@
 const captainController = require("../controllers/captain.controller");
 const express = require("express");
 const router = express.Router();
+router.use(
+  ["/login", "/forgot-password", "/reset-password"],
+  require("../middlewares/accountLimit.middleware"),
+);
 const { body } = require("express-validator");
 const authMiddleware = require("../middlewares/auth.middleware");
 
 router.post(
   "/register",
   [
-    body("email").isEmail().withMessage("Invalid Email"),
+    body("email")
+      .isString()
+      .trim()
+      .isLength({ max: 254 })
+      .isEmail()
+      .withMessage("Invalid Email"),
     body("fullname.firstname")
       .isLength({ min: 3 })
       .withMessage("First name must be at least 3 characters long"),
     body("password")
-      .isLength({ min: 6 })
-      .withMessage("Password must be at least 6 characters long"),
+      .isString()
+      .isLength({ min: 8, max: 72 })
+      .custom((value) => Buffer.byteLength(value, "utf8") <= 72)
+      .withMessage(
+        "Use 8–72 characters (at most 72 UTF-8 bytes) for your password",
+      ),
     body("vehicle.color")
       .isLength({ min: 3 })
       .withMessage("Color must be at least 3 characters long"),
@@ -33,10 +46,17 @@ router.post(
 router.post(
   "/login",
   [
-    body("email").isEmail().withMessage("Invalid Email"),
+    body("email")
+      .isString()
+      .trim()
+      .isLength({ max: 254 })
+      .isEmail()
+      .withMessage("Invalid Email"),
     body("password")
-      .isLength({ min: 6 })
-      .withMessage("Password must be at least 6 characters long"),
+      .isString()
+      .isLength({ min: 1, max: 72 })
+      .custom((value) => Buffer.byteLength(value, "utf8") <= 72)
+      .withMessage("Enter your password"),
   ],
   captainController.loginCaptain,
 );
@@ -55,21 +75,40 @@ router.get(
 
 router.post(
   "/forgot-password",
-  [body("email").isEmail().withMessage("Invalid Email")],
+  [
+    body("email")
+      .isString()
+      .trim()
+      .isLength({ max: 254 })
+      .isEmail()
+      .withMessage("Invalid Email"),
+  ],
+  require("../utils/errors").validate,
   captainController.forgotPassword,
 );
 
 router.post(
   "/reset-password",
   [
-    body("email").isEmail().withMessage("Invalid Email"),
+    body("email")
+      .isString()
+      .trim()
+      .isLength({ max: 254 })
+      .isEmail()
+      .withMessage("Invalid Email"),
     body("otp")
-      .isLength({ min: 6, max: 6 })
+      .isString()
+      .matches(/^\d{6}$/)
       .withMessage("OTP must be 6 digits"),
     body("newPassword")
-      .isLength({ min: 6 })
-      .withMessage("Password must be at least 6 characters long"),
+      .isString()
+      .isLength({ min: 8, max: 72 })
+      .custom((value) => Buffer.byteLength(value, "utf8") <= 72)
+      .withMessage(
+        "Use 8–72 characters (at most 72 UTF-8 bytes) for your password",
+      ),
   ],
+  require("../utils/errors").validate,
   captainController.resetPassword,
 );
 
@@ -82,7 +121,8 @@ router.patch(
     .isString()
     .trim()
     .isLength({ min: 3, max: 50 }),
-  body("email").isEmail().normalizeEmail(),
+  body("email").isString().trim().isLength({ max: 254 }).isEmail(),
+  body("currentPassword").optional().isString().isLength({ max: 72 }),
   require("../utils/errors").validate,
   require("../utils/errors").asyncHandler(
     require("../controllers/account.controller").profile,

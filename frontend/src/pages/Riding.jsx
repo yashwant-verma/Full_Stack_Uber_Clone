@@ -1,3 +1,4 @@
+import UpiPayment from "../components/UpiPayment";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import api, { errorMessage } from "../api/client";
@@ -69,21 +70,35 @@ export default function Riding() {
                 : "New driver · No ratings yet"}
             </p>
             <FareBreakdown ride={ride} />
-            {ride.paymentStatus === "rider_confirmed" ? (
+            {ride.paymentStatus === "verified" ? (
+              <Feedback
+                success
+                message={
+                  ride.paymentMode === "test"
+                    ? "Test UPI payment verified. No real money was collected. Waiting for your captain to finish."
+                    : "UPI payment verified. Do not pay cash. Waiting for your captain to finish."
+                }
+              />
+            ) : ride.paymentStatus === "rider_confirmed" ? (
               <Feedback
                 success
                 message="You confirmed paying cash. Waiting for the captain to confirm receipt and finish the ride."
               />
             ) : (
               <>
+                <UpiPayment ride={ride} refresh={refresh} />
                 <p className="text-sm text-slate-600">
                   Pay cash directly to your captain when you arrive, then
                   confirm below.
                 </p>
                 <button
                   className="btn w-full"
-                  disabled={busy || ride.status !== "ongoing"}
-                  onClick={pay}
+                  disabled={
+                    busy ||
+                    ride.status !== "ongoing" ||
+                    ride.paymentMethod === "upi"
+                  }
+                  data-log-action="confirm-cash" onClick={pay}
                 >
                   {busy ? "Saving…" : `I paid ₹${ride.fare} in cash`}
                 </button>

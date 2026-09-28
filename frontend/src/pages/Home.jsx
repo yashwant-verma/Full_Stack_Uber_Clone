@@ -149,7 +149,7 @@ export default function Home() {
               <button
                 className="btn-secondary w-full"
                 disabled={busy}
-                onClick={cancel}
+                data-log-action="cancel-ride" onClick={cancel}
               >
                 {busy ? "Please wait…" : "Cancel ride"}
               </button>
@@ -263,7 +263,7 @@ export default function Home() {
                     The final booking fare is calculated again when you confirm
                     and shown before your ride starts.
                   </p>
-                  <button className="btn w-full" disabled={busy} onClick={book}>
+                  <button className="btn w-full" disabled={busy} data-log-action="book-ride" onClick={book}>
                     {busy ? "Booking…" : "Confirm booking"}
                   </button>
                   <button

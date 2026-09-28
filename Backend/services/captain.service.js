@@ -38,3 +38,5 @@ module.exports.createCaptain = async ({
 
   return captain;
 };
+
+module.exports = require("../utils/instrument")(module.exports, "captain");

@@ -2,7 +2,7 @@
 
 Built by **Yashwant** as a fresher portfolio and learning project.
 
-RideX uses React, Express, Node.js, MongoDB and Socket.IO. It demonstrates rider and captain accounts, booking, an OTP start, location updates and a cash-confirmation flow. It is not a commercial transport service.
+RideX uses React, Express, Node.js, MongoDB and Socket.IO. It demonstrates rider and captain accounts, booking, an OTP start, location updates and cash/UPI payment flows. It is not a commercial transport service.
 
 ## Preview
 
@@ -20,6 +20,7 @@ The `/demo` page works without login, Maps credentials or a backend. Its sample 
 - Authenticated Socket.IO rooms; saved database state and HTTP polling recover updates after refresh.
 - Actual captain location updates while online/on a ride; no invented GPS movement.
 - Cash confirmation saved by the rider, then confirmed by the captain when finishing.
+- Razorpay UPI checkout with server verification, raw-body webhooks and duplicate-payment protection. Test mode is labelled.
 - Paginated ride history, printable cash receipts, one rating/review per completed ride.
 - Responsive pages, error messages, loading/empty states and a 404 page.
 
@@ -106,4 +107,14 @@ Older login tokens have no role claim, so sign in again after updating. Back up 
 
 ## Limitations
 
-This is a single-server learning project. Nearby matching uses a bounded query and a simple Haversine distance check; it is not a city-scale dispatch system. Rate limits are in memory and reset with the server. There are no card/UPI payments, commercial driver verification or emergency dispatch. Network/GPS updates can be delayed. Location and Maps/SMTP integration should be checked with your own credentials before sharing a hosted demo.
+This is a single-server learning project. Nearby matching uses a bounded query and a simple Haversine distance check; it is not a city-scale dispatch system. Rate limits are in memory and reset with the server. There are no card payments, automated driver payouts, commercial driver verification or emergency dispatch. Network/GPS updates can be delayed. Location and Maps/SMTP integration should be checked with your own credentials before sharing a hosted demo.
+
+## UPI and security update
+
+See [UPI setup](docs/UPI_SETUP.md) and [security notes](SECURITY.md). Author: **Yashwant**. Existing sessions must log in again because JWT issuer/audience checks changed. Existing password-reset codes must be requested again.
+
+Run `npm run test:security` in Backend for payment-signature and input-security unit checks without MongoDB. Full MongoDB/browser/gateway verification remains separate; manual CI is retained.
+
+## Terminal and browser logs
+
+See [logging instructions](docs/LOGGING.md). Debug logging shows processing steps, request IDs, DB operations and service errors without dumping passwords/OTP/payment secrets. Development UI events also appear in the backend terminal.

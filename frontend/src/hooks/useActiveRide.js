@@ -31,6 +31,7 @@ export default function useActiveRide() {
       "ride-ended",
       "ride-cancelled",
       "payment-received",
+      "payment-verified",
     ])
       socket.on(event, refresh);
     const location = (data) =>
@@ -57,6 +58,7 @@ export default function useActiveRide() {
         "ride-ended",
         "ride-cancelled",
         "payment-received",
+        "payment-verified",
       ])
         socket.off(event, refresh);
     };

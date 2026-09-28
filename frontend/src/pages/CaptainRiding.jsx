@@ -59,19 +59,34 @@ export default function CaptainRiding() {
             ) : (
               <>
                 <Feedback
-                  success={ride.paymentStatus === "rider_confirmed"}
+                  success={["rider_confirmed", "verified"].includes(
+                    ride.paymentStatus,
+                  )}
                   message={
-                    ride.paymentStatus === "rider_confirmed"
-                      ? "Rider confirmed paying cash. Check that you received it before finishing."
-                      : "Waiting for the rider to confirm cash payment."
+                    ride.paymentStatus === "verified"
+                      ? ride.paymentMode === "test"
+                        ? "Test UPI verified; no real money collected. You can finish the ride."
+                        : "UPI verified by the server. Do not collect cash."
+                      : ride.paymentStatus === "rider_confirmed"
+                        ? "Rider confirmed paying cash. Check that you received it before finishing."
+                        : "Waiting for the rider to confirm cash payment."
                   }
                 />
                 <button
                   className="btn w-full"
-                  disabled={busy || ride.paymentStatus !== "rider_confirmed"}
-                  onClick={finish}
+                  disabled={
+                    busy ||
+                    !["rider_confirmed", "verified"].includes(
+                      ride.paymentStatus,
+                    )
+                  }
+                  data-log-action="finish-ride" onClick={finish}
                 >
-                  {busy ? "Finishing…" : "Cash received — finish ride"}
+                  {busy
+                    ? "Finishing…"
+                    : ride.paymentStatus === "verified"
+                      ? "Finish ride — UPI verified"
+                      : "Cash received — finish ride"}
                 </button>
               </>
             )}

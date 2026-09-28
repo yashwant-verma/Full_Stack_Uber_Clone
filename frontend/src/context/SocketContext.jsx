@@ -1,3 +1,4 @@
+import { log } from "../utils/logger";
 import { SocketContext } from "./contexts";
 import PropTypes from "prop-types";
 import { useEffect, useState } from "react";
@@ -12,8 +13,8 @@ export default function SocketProvider({ children }) {
   const { pathname } = useLocation();
   const [connected, setConnected] = useState(false);
   useEffect(() => {
-    const connect = () => setConnected(true);
-    const disconnect = () => setConnected(false);
+    const connect = () => { setConnected(true); log("ui.socket", { status: "connected" }); };
+    const disconnect = reason => { setConnected(false); log("ui.socket", { status: "disconnected", reason: typeof reason === "string" ? reason : "Connection unavailable" }, "warn"); };
     socket.on("connect", connect);
     socket.on("disconnect", disconnect);
     socket.on("connect_error", disconnect);
@@ -24,6 +25,7 @@ export default function SocketProvider({ children }) {
     };
   }, []);
   useEffect(() => {
+    log("ui.navigation", { path: pathname });
     if (localStorage.getItem("token")) socket.connect();
     else socket.disconnect();
   }, [pathname]);

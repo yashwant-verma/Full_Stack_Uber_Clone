@@ -31,3 +31,13 @@ All protected endpoints use `Authorization: Bearer <token>`. Tokens include acco
 Socket.IO takes `{ auth: { token } }` on connection. Identity rooms are assigned by the server. Clients cannot send join, payment or location changes to choose another identity. Use the authenticated HTTP endpoints, which persist data before emitting events. OTP is returned only in the rider view, never the captain view.
 
 `GET /rides/user-active-ride` remains as a rider-only compatibility endpoint. Ride start is now POST, so the OTP is not put in the query string.
+
+## UPI endpoints
+
+- `GET /payments/config`: authenticated rider sees availability, public key ID and test/live mode.
+- `POST /payments/:id/order`: create or reuse the ongoing ride's order; no client amount accepted.
+- `POST /payments/:id/verify`: verify Razorpay order/payment/signature and captured payment.
+- `POST /payments/:id/status`: reconcile with provider after a lost callback.
+- `POST /payments/webhook`: raw-body, signature-authenticated provider callback; no bearer token.
+
+An UPI ride finishes only after `paymentStatus=verified`. Cash uses the existing two-person confirmation. See [UPI setup](../docs/UPI_SETUP.md).

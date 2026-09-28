@@ -332,7 +332,7 @@ test("anonymous sockets are rejected and client join events cannot impersonate a
 test("password reset invalidates old tokens and allows login with the new password", async () => {
   const crypto = require("crypto");
   await User.findByIdAndUpdate(rider._id, {
-    resetOtp: crypto.createHash("sha256").update("234567").digest("hex"),
+    resetOtp: crypto.createHmac("sha256", process.env.JWT_SECRET).update(`${rider.email}:234567`).digest("hex"),
     resetOtpExpires: new Date(Date.now() + 60000),
   });
   await request(app)
